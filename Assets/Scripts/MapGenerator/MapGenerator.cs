@@ -62,14 +62,32 @@ public class MapGenerator : MonoBehaviour
         foreach (Door door in doorsToTry)
         {
             // find new room pos
+            doors.Remove(door);
 
             // find available rooms that work with this door (findvalidrooms)
+            List<Room> validRooms = FindValidRooms(door.GetGridCoordinates(), occupied);
 
             // for each valid room option, "place" (add to occupied and add new doors to a updated doors list)
+            foreach (Room room in validRooms)
+            {
+                // TODO: Possibly expand the helper FindValidRooms to also return direction relative to curent room
+                // Vector2Int pos = 
+                // room.Place()
+            }
 
-            // recursively call GenerateWithBacktracking(occupied, updated doors, depth + 1)
+
+            if (GenerateWithBacktracking(occupied, doors, depth + 1))
+            {
                 // if its true place room and hallway for real and return true
+                
+                return true;
+            }
+            else
+            {
                 // if false, remove from occupied
+
+                // occupied.Remove();
+            }
         }
 
 
@@ -80,10 +98,10 @@ public class MapGenerator : MonoBehaviour
     public List<Room> FindValidRooms(Vector2Int pos, Dictionary<Vector2Int, Room> occupied)
     {
         // positions of adjacent tiles
-        Vector2Int eastPos = pos + new Vector2Int(1, 0);
-        Vector2Int westPos = pos + new Vector2Int(-1, 0);
-        Vector2Int northPos = pos + new Vector2Int(0, 1);
-        Vector2Int southPos = pos + new Vector2Int(0, -1);
+        Vector2Int eastPos = pos + Vector2Int.right;
+        Vector2Int westPos = pos + Vector2Int.left;
+        Vector2Int northPos = pos + Vector2Int.up;
+        Vector2Int southPos = pos + Vector2Int.down;
 
         // get rooms from the occupied dictionary
         Room east = occupied.GetValueOrDefault(eastPos);
