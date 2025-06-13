@@ -28,6 +28,7 @@ public class MapGenerator : MonoBehaviour
     Dictionary<Vector2Int, Room> occupied;
 
     int iterations;
+    bool hasTarget = false;
 
     public void Generate()
     {
@@ -43,14 +44,22 @@ public class MapGenerator : MonoBehaviour
         occupied = new Dictionary<Vector2Int, Room>(); // switched list to dictionary so its more efficient
         occupied[Vector2Int.zero] = start;
         iterations = 0;
-        GenerateWithBacktracking(doors, 1);
+        hasTarget = false;
+        if (!GenerateWithBacktracking(doors, 1) || !hasTarget)
+        {
+            Generate();
+        }
     }
 
 
     bool GenerateWithBacktracking(List<Door> doors, int depth)
     {
         iterations++;
-        if (iterations > THRESHOLD) throw new System.Exception("Iteration limit exceeded");
+        if (iterations > THRESHOLD)
+        {
+            return false;
+            // throw new System.Exception("Iteration limit exceeded");
+        }
 
         // find new room pos
         // find available rooms that work with this door (findvalidrooms)
@@ -78,7 +87,7 @@ public class MapGenerator : MonoBehaviour
             return false;
         }
 
-        foreach (Room room in GetValidRooms(door))
+        foreach (Room room in GetValidRooms(door, depth))
         {
             occupied.Add(newRoomCoord, room);
             List<Door> newDoors = ConcatDoors(door, doors, room.GetDoors(newRoomCoord));
@@ -98,7 +107,7 @@ public class MapGenerator : MonoBehaviour
 
     // Alternative valid rooms helper function
     // Returns a valid room that's has the corresponding side
-    private List<Room> GetValidRooms(Door door)
+    private List<Room> GetValidRooms(Door door, int depth)
     {
         List<Room> validRooms = new List<Room>();
 
@@ -111,6 +120,16 @@ public class MapGenerator : MonoBehaviour
         }
 
         Shuffle(validRooms);
+
+        // Add Target to beginning if applies
+        if (!hasTarget && depth >= 5)
+        {
+            if (target.HasDoorOnSide(door.GetMatchingDirection()))
+            {
+                validRooms.Insert(0, target);
+            }
+        }
+
         return validRooms;
     }
 
@@ -130,6 +149,8 @@ public class MapGenerator : MonoBehaviour
 
     private Room PlaceNewRoom(Room roomToPlace, Vector2Int roomCoord, Door door)
     {
+        if (roomToPlace == target) { hasTarget = true; }
+
         GameObject hallway = (door.IsHorizontal() ? horizontal_hallway : vertical_hallway).Place(door);
         GameObject room = roomToPlace.Place(roomCoord);
         generated_objects.Add(hallway);
