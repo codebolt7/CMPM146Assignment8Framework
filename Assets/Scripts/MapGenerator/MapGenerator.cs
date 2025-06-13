@@ -23,7 +23,10 @@ public class MapGenerator : MonoBehaviour
 
     // keep the instantiated rooms and hallways here 
     private List<GameObject> generated_objects;
-    
+
+    // Moved occupied here for more convenience 
+    Dictionary<Vector2Int, Room> occupied;
+
     int iterations;
 
     public void Generate()
@@ -37,14 +40,14 @@ public class MapGenerator : MonoBehaviour
         
         generated_objects.Add(start.Place(new Vector2Int(0,0)));
         List<Door> doors = start.GetDoors();
-        Dictionary<Vector2Int, Room> occupied = new Dictionary<Vector2Int, Room>(); // switched list to dictionary so its more efficient
-        occupied[new Vector2Int(0, 0)] = start;
+        occupied = new Dictionary<Vector2Int, Room>(); // switched list to dictionary so its more efficient
+        occupied[Vector2Int.zero] = start;
         iterations = 0;
-        GenerateWithBacktracking(occupied, doors, 1);
+        GenerateWithBacktracking(Vector2Int.zero, doors, 1);
     }
 
 
-    bool GenerateWithBacktracking(Dictionary<Vector2Int, Room> occupied, List<Door> doors, int depth)
+    bool GenerateWithBacktracking(Vector2Int roomCoord, List<Door> doors, int depth)
     {
         iterations++;
         if (iterations > THRESHOLD) throw new System.Exception("Iteration limit exceeded");
@@ -62,36 +65,81 @@ public class MapGenerator : MonoBehaviour
         foreach (Door door in doorsToTry)
         {
             // find new room pos
-            doors.Remove(door);
-
             // find available rooms that work with this door (findvalidrooms)
-            List<Room> validRooms = FindValidRooms(door.GetGridCoordinates(), occupied);
-
             // for each valid room option, "place" (add to occupied and add new doors to a updated doors list)
-            foreach (Room room in validRooms)
-            {
-                // TODO: Possibly expand the helper FindValidRooms to also return direction relative to curent room
-                // Vector2Int pos = 
-                // room.Place()
-            }
-
-
-            if (GenerateWithBacktracking(occupied, doors, depth + 1))
-            {
                 // if its true place room and hallway for real and return true
-                
-                return true;
-            }
-            else
-            {
                 // if false, remove from occupied
 
-                // occupied.Remove();
+            Vector2Int newRoomCoord = GetNextRoomCoord(roomCoord, door);
+
+            // Skip if side is occuppied
+            if (occupied.ContainsKey(newRoomCoord))
+            {
+                continue;
+            }
+
+            foreach (Room room in GetValidRooms(door))
+            {
+                occupied.Add(newRoomCoord, room);
+                if (GenerateWithBacktracking(newRoomCoord, room.GetDoors(), depth + 1))
+                {
+                    Room newRoom = PlaceNewRoom(roomCoord, door);
+                    return true;
+                }
+                else
+                {
+                    occupied.Remove(newRoomCoord);
+                }
             }
         }
 
 
         return false;
+    }
+
+    // Alternative valid rooms helper function
+    // Returns a valid room that's has the corresponding side
+    private List<Room> GetValidRooms(Door door)
+    {
+        List<Room> validRooms = new List<Room>();
+
+        foreach (Room room in rooms)
+        {
+            if (room.HasDoorOnSide(door.GetMatchingDirection()))
+            {
+                validRooms.Add(room);
+            }
+        }
+
+        Shuffle(validRooms);
+        return validRooms;
+    }
+
+    private Vector2Int GetNextRoomCoord(Vector2Int currentRoomCoord, Door door)
+    {
+        Vector2Int direction = door.GetDirection() switch
+        {
+            Door.Direction.NORTH => Vector2Int.up,
+            Door.Direction.SOUTH => Vector2Int.down,
+            Door.Direction.EAST => Vector2Int.right,
+            Door.Direction.WEST => Vector2Int.left,
+            _ => Vector2Int.zero
+        };
+
+        return currentRoomCoord + direction;
+    }
+
+    private Room PlaceNewRoom(Vector2Int roomCoord, Door door)
+    {
+        List<Room roomToPlace = GetValidRoom(roomCoord, door);
+
+        if (roomToPlace == null) 
+        {
+            return null;
+        }
+
+        (door.IsHorizontal() ? horizontal_hallway : vertical_hallway).Place(door);
+        return roomToPlace.Place(roomCoord).GetComponent<Room>();
     }
 
     // finding valid rooms helper function
