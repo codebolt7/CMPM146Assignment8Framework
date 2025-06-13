@@ -28,12 +28,7 @@ public class MapGenerator : MonoBehaviour
     Dictionary<Vector2Int, Room> occupied;
 
     int iterations;
-
-    enum TargetState
-    {
-        None, Pending, Placed
-    }
-    TargetState targetState = TargetState.None;
+    bool hasTarget = false;
 
     public void Generate()
     {
@@ -43,14 +38,14 @@ public class MapGenerator : MonoBehaviour
             Destroy(go);
         }
         generated_objects.Clear();
-        
-        generated_objects.Add(start.Place(new Vector2Int(0,0)));
+
+        generated_objects.Add(start.Place(new Vector2Int(0, 0)));
         List<Door> doors = start.GetDoors();
         occupied = new Dictionary<Vector2Int, Room>(); // switched list to dictionary so its more efficient
         occupied[Vector2Int.zero] = start;
         iterations = 0;
-        targetState = TargetState.None;
-        if (!GenerateWithBacktracking(doors, 1) || targetState != TargetState.Placed)
+        hasTarget = false;
+        if (!GenerateWithBacktracking(doors, 1) || !hasTarget)
         {
             Generate();
         }
@@ -69,8 +64,8 @@ public class MapGenerator : MonoBehaviour
         // find new room pos
         // find available rooms that work with this door (findvalidrooms)
         // for each valid room option, "place" (add to occupied and add new doors to a updated doors list)
-            // if its true place room and hallway for real and return true
-            // if false, remove from occupied
+        // if its true place room and hallway for real and return true
+        // if false, remove from occupied
 
         FilterDoorList(doors);
 
@@ -94,8 +89,6 @@ public class MapGenerator : MonoBehaviour
 
         foreach (Room room in GetValidRooms(door, depth))
         {
-            if (room == target) targetState = TargetState.Pending;
-
             occupied.Add(newRoomCoord, room);
             List<Door> newDoors = ConcatDoors(door, doors, room.GetDoors(newRoomCoord));
             if (GenerateWithBacktracking(newDoors, depth + 1))
@@ -105,10 +98,6 @@ public class MapGenerator : MonoBehaviour
             }
             else
             {
-                if (targetState == TargetState.Pending)
-                {
-                    targetState = TargetState.None;
-                }
                 occupied.Remove(newRoomCoord);
             }
         }
@@ -124,24 +113,26 @@ public class MapGenerator : MonoBehaviour
 
         foreach (Room room in rooms)
         {
+            if (room == target && hasTarget) continue;
+
             if (room.HasDoorOnSide(door.GetMatchingDirection()))
             {
                 validRooms.Add(room);
             }
         }
 
-        Shuffle(validRooms);
+        List<Room> weightedRooms = WeightedSelection(validRooms);
 
         // Add Target to beginning if applies
-        if (targetState == TargetState.None && depth >= 5)
+        if (!hasTarget && depth >= 5)
         {
             if (target.HasDoorOnSide(door.GetMatchingDirection()))
             {
-                validRooms.Insert(0, target);
+                weightedRooms.Insert(0, target);
             }
         }
 
-        return validRooms;
+        return weightedRooms;
     }
 
     private Vector2Int GetNextRoomCoord(Door door)
@@ -160,7 +151,7 @@ public class MapGenerator : MonoBehaviour
 
     private Room PlaceNewRoom(Room roomToPlace, Vector2Int roomCoord, Door door)
     {
-        if (roomToPlace == target) targetState = TargetState.Placed;
+        if (roomToPlace == target) { hasTarget = true; }
 
         GameObject hallway = (door.IsHorizontal() ? horizontal_hallway : vertical_hallway).Place(door);
         GameObject room = roomToPlace.Place(roomCoord);
@@ -172,7 +163,7 @@ public class MapGenerator : MonoBehaviour
 
     private void FilterDoorList(List<Door> doors)
     {
-        for (int i = 0; i < doors.Count; )
+        for (int i = 0; i < doors.Count;)
         {
             Door door = doors[i];
             if (door == null)
@@ -198,41 +189,7 @@ public class MapGenerator : MonoBehaviour
         return list;
     }
 
-    // finding valid rooms helper function
-    public List<Room> FindValidRooms(Vector2Int pos, Dictionary<Vector2Int, Room> occupied)
-    {
-        // positions of adjacent tiles
-        Vector2Int eastPos = pos + Vector2Int.right;
-        Vector2Int westPos = pos + Vector2Int.left;
-        Vector2Int northPos = pos + Vector2Int.up;
-        Vector2Int southPos = pos + Vector2Int.down;
-
-        // get rooms from the occupied dictionary
-        Room east = occupied.GetValueOrDefault(eastPos);
-        Room west = occupied.GetValueOrDefault(westPos);
-        Room north = occupied.GetValueOrDefault(northPos);
-        Room south = occupied.GetValueOrDefault(southPos);
-
-        List<Room> options = new();
-        
-        // iterate over room options and check validity
-        foreach (var room in rooms)
-        {
-            if (east && (room.HasDoorOnSide(Door.Direction.EAST) != east.HasDoorOnSide(Door.Direction.WEST))) continue;
-            if (west && (room.HasDoorOnSide(Door.Direction.WEST) != west.HasDoorOnSide(Door.Direction.EAST))) continue;
-            if (north && (room.HasDoorOnSide(Door.Direction.NORTH) != north.HasDoorOnSide(Door.Direction.SOUTH))) continue;
-            if (south && (room.HasDoorOnSide(Door.Direction.SOUTH) != south.HasDoorOnSide(Door.Direction.NORTH))) continue;
-
-            options.Add(room);
-        }
-
-        // shuffle and return list of valid options
-        Shuffle(options);
-        return options;
-
-    }
-
-    // shuffle helper function
+    // basic shuffle helper function
     void Shuffle<T>(List<T> list)
     {
         for (int i = list.Count - 1; i > 0; i--)
@@ -240,6 +197,26 @@ public class MapGenerator : MonoBehaviour
             int r = Random.Range(0, i + 1);
             (list[i], list[r]) = (list[r], list[i]);
         }
+    }
+
+    // weighted selection
+    private List<Room> WeightedSelection(List<Room> rooms)
+    {
+        List<Room> weightedList = new List<Room>();
+
+        foreach (Room room in rooms)
+        {
+            int weight = Mathf.Max(1, room.weight);
+            for (int i = 0; i < weight; i++)
+            {
+                weightedList.Add(room);
+            }
+
+        }
+
+        Shuffle(weightedList);
+        return weightedList;
+
     }
 
 
