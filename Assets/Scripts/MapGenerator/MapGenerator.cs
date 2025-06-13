@@ -28,7 +28,12 @@ public class MapGenerator : MonoBehaviour
     Dictionary<Vector2Int, Room> occupied;
 
     int iterations;
-    bool hasTarget = false;
+
+    enum TargetState
+    {
+        None, Pending, Placed
+    }
+    TargetState targetState = TargetState.None;
 
     public void Generate()
     {
@@ -44,8 +49,8 @@ public class MapGenerator : MonoBehaviour
         occupied = new Dictionary<Vector2Int, Room>(); // switched list to dictionary so its more efficient
         occupied[Vector2Int.zero] = start;
         iterations = 0;
-        hasTarget = false;
-        if (!GenerateWithBacktracking(doors, 1) || !hasTarget)
+        targetState = TargetState.None;
+        if (!GenerateWithBacktracking(doors, 1) || targetState != TargetState.Placed)
         {
             Generate();
         }
@@ -89,6 +94,8 @@ public class MapGenerator : MonoBehaviour
 
         foreach (Room room in GetValidRooms(door, depth))
         {
+            if (room == target) targetState = TargetState.Pending;
+
             occupied.Add(newRoomCoord, room);
             List<Door> newDoors = ConcatDoors(door, doors, room.GetDoors(newRoomCoord));
             if (GenerateWithBacktracking(newDoors, depth + 1))
@@ -98,6 +105,10 @@ public class MapGenerator : MonoBehaviour
             }
             else
             {
+                if (targetState == TargetState.Pending)
+                {
+                    targetState = TargetState.None;
+                }
                 occupied.Remove(newRoomCoord);
             }
         }
@@ -122,7 +133,7 @@ public class MapGenerator : MonoBehaviour
         Shuffle(validRooms);
 
         // Add Target to beginning if applies
-        if (!hasTarget && depth >= 5)
+        if (targetState == TargetState.None && depth >= 5)
         {
             if (target.HasDoorOnSide(door.GetMatchingDirection()))
             {
@@ -149,7 +160,7 @@ public class MapGenerator : MonoBehaviour
 
     private Room PlaceNewRoom(Room roomToPlace, Vector2Int roomCoord, Door door)
     {
-        if (roomToPlace == target) { hasTarget = true; }
+        if (roomToPlace == target) targetState = TargetState.Placed;
 
         GameObject hallway = (door.IsHorizontal() ? horizontal_hallway : vertical_hallway).Place(door);
         GameObject room = roomToPlace.Place(roomCoord);
